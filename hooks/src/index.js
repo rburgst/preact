@@ -127,7 +127,6 @@ options.unmount = vnode => {
 			try {
 				c.__hooks._pendingEffects.push(s);
 				if (!hasScheduled) {
-					c._unmounted = true;
 					hasScheduled = true;
 					afterPaint(afterPaintEffects.push(c));
 				}
@@ -458,12 +457,14 @@ export function useId() {
 function flushAfterPaintEffects() {
 	let component;
 	while ((component = afterPaintEffects.shift())) {
-		if (!component._parentDom || !component.__hooks) continue;
+		if (!component.__hooks) continue;
 		try {
 			component.__hooks._pendingEffects.forEach(invokeCleanup);
-			if (!component._unmounted) {
-				component.__hooks._pendingEffects.forEach(invokeEffect);
+			if (!component._parentDom) {
+				component.__hooks = undefined;
+				continue;
 			}
+			component.__hooks._pendingEffects.forEach(invokeEffect);
 			component.__hooks._pendingEffects = [];
 		} catch (e) {
 			component.__hooks._pendingEffects = [];

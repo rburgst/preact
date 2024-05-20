@@ -1,6 +1,6 @@
 import { act, teardown as teardownAct } from 'preact/test-utils';
 import { createElement, render, Fragment, Component } from 'preact';
-import { useEffect, useState, useRef } from 'preact/hooks';
+import { useEffect, useState, useRef, useLayoutEffect } from 'preact/hooks';
 import { setupScratch, teardown } from '../../../test/_util/helpers';
 import { useEffectAssertions } from './useEffectAssertions.test';
 import { scheduleEffectAssert } from '../_util/useEffectUtil';
@@ -601,6 +601,47 @@ describe('useEffect', () => {
 		act(() => {
 			render(<App i={2} />, scratch);
 		});
+	});
+
+	it('should defer unmount hooks until commit', () => {
+		const calls = [];
+		let set;
+		let Parent = () => {
+			calls.push('parent render start');
+			useLayoutEffect(() => {
+				calls.push('parent render end');
+			});
+
+			let [showChild, setShowChild] = useState(true);
+			set = () => setShowChild(false);
+
+			return showChild ? <Child /> : null;
+		};
+
+		let Child = () => {
+			useEffect(() => {
+				return () => {
+					calls.push('child cleanup');
+				};
+			}, []);
+			return null;
+		};
+
+		act(() => {
+			render(<Parent />, scratch);
+		});
+
+		act(() => {
+			set();
+		});
+
+		expect(calls).to.deep.equal([
+			'parent render start',
+			'parent render end',
+			'parent render start',
+			'parent render end',
+			'child cleanup'
+		]);
 	});
 
 	it('should not schedule effects that have no change', () => {
