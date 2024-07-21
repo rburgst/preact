@@ -2,6 +2,7 @@ import { diff, unmount, applyRef } from './index';
 import { createVNode, Fragment } from '../create-element';
 import { EMPTY_OBJ, EMPTY_ARR } from '../constants';
 import { isArray } from '../util';
+import { getDomSibling } from '../component';
 
 /**
  * Diff the children of a virtual node
@@ -158,37 +159,28 @@ export function diffChildren(
 			}
 
 			let isMounting = oldVNode === EMPTY_OBJ || oldVNode._original === null;
-			let hasMatchingIndex = !isMounting && matchingIndex === skewedIndex;
 			if (isMounting) {
 				if (matchingIndex == -1) {
 					skew--;
 				}
 			} else if (matchingIndex !== skewedIndex) {
-				if (matchingIndex === skewedIndex + 1) {
+				if (matchingIndex == skewedIndex - 1) {
+					skew = matchingIndex - skewedIndex;
+				} else if (matchingIndex === skewedIndex + 1) {
 					skew++;
-					hasMatchingIndex = true;
 				} else if (matchingIndex > skewedIndex) {
 					if (remainingOldChildren > newChildrenLength - skewedIndex) {
 						skew += matchingIndex - skewedIndex;
-						hasMatchingIndex = true;
 					} else {
 						// ### Change from keyed: I think this was missing from the algo...
 						skew--;
 					}
 				} else if (matchingIndex < skewedIndex) {
-					if (matchingIndex == skewedIndex - 1) {
-						skew = matchingIndex - skewedIndex;
-					} else {
-						skew = 0;
-					}
-				} else {
-					skew = 0;
+					skew++;
 				}
 			}
 
 			skewedIndex = i + skew;
-			hasMatchingIndex =
-				hasMatchingIndex || (matchingIndex == i && !isMounting);
 
 			if (
 				typeof childVNode.type == 'function' &&
@@ -196,22 +188,22 @@ export function diffChildren(
 					oldVNode._children === childVNode._children)
 			) {
 				oldDom = reorderChildren(childVNode, oldDom, parentDom);
-			} else if (typeof childVNode.type != 'function' && !hasMatchingIndex) {
-				oldDom = placeChild(parentDom, newDom, oldDom);
+			} else if (typeof childVNode.type != 'function' && (isMounting || matchingIndex !== skewedIndex)) {
+				oldDom = placeChild(childVNode, parentDom, newDom, oldDom);
 			} else if (childVNode._nextDom !== undefined) {
 				// Only Fragments or components that return Fragment like VNodes will
 				// have a non-undefined _nextDom. Continue the diff from the sibling
 				// of last DOM child of this child VNode
 				oldDom = childVNode._nextDom;
-
-				// Eagerly cleanup _nextDom. We don't need to persist the value because
-				// it is only used by `diffChildren` to determine where to resume the diff after
-				// diffing Components and Fragments. Once we store it the nextDOM local var, we
-				// can clean up the property
-				childVNode._nextDom = undefined;
 			} else {
 				oldDom = newDom.nextSibling;
 			}
+
+			// Eagerly cleanup _nextDom. We don't need to persist the value because
+			// it is only used by `diffChildren` to determine where to resume the diff after
+			// diffing Components and Fragments. Once we store it the nextDOM local var, we
+			// can clean up the property
+			childVNode._nextDom = undefined;
 
 			if (typeof newParentVNode.type == 'function') {
 				// Because the newParentVNode is Fragment-like, we need to set it's
@@ -265,7 +257,7 @@ function reorderChildren(childVNode, oldDom, parentDom) {
 			if (typeof vnode.type == 'function') {
 				oldDom = reorderChildren(vnode, oldDom, parentDom);
 			} else {
-				oldDom = placeChild(parentDom, vnode._dom, oldDom);
+				oldDom = placeChild(vnode, parentDom, vnode._dom, oldDom);
 			}
 		}
 	}
@@ -292,10 +284,17 @@ export function toChildArray(children, out) {
 	return out;
 }
 
-function placeChild(parentDom, newDom, oldDom) {
+function placeChild(vnode, parentDom, newDom, oldDom) {
 	if (oldDom == null || oldDom.parentNode !== parentDom) {
 		parentDom.insertBefore(newDom, null);
 	} else if (newDom != oldDom || newDom.parentNode == null) {
+		if (
+			oldDom &&
+			vnode.type &&
+			!parentDom.contains(oldDom)
+		) {
+			oldDom = getDomSibling(vnode);
+		}
 		parentDom.insertBefore(newDom, oldDom);
 	}
 
