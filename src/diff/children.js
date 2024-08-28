@@ -231,31 +231,6 @@ function constructNewChildrenArray(newParentVNode, renderResult, oldChildren) {
 
 		// Handle unmounting null placeholders, i.e. VNode => null in unkeyed children
 		if (childVNode == null) {
-			oldVNode = oldChildren[skewedIndex];
-			if (
-				oldVNode &&
-				oldVNode.key == null &&
-				oldVNode._dom &&
-				(oldVNode._flags & MATCHED) === 0
-			) {
-				if (oldVNode._dom == newParentVNode._nextDom) {
-					newParentVNode._nextDom = getDomSibling(oldVNode);
-				}
-
-				unmount(oldVNode, oldVNode, false);
-
-				// Explicitly nullify this position in oldChildren instead of just
-				// setting `_match=true` to prevent other routines (e.g.
-				// `findMatchingIndex` or `getDomSibling`) from thinking VNodes or DOM
-				// nodes in this position are still available to be used in diffing when
-				// they have actually already been unmounted. For example, by only
-				// setting `_match=true` here, the unmounting loop later would attempt
-				// to unmount this VNode again seeing `_match==true`.  Further,
-				// getDomSibling doesn't know about _match and so would incorrectly
-				// assume DOM nodes in this subtree are mounted and usable.
-				oldChildren[skewedIndex] = null;
-				remainingOldChildren--;
-			}
 			continue;
 		}
 
